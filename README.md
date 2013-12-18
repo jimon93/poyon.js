@@ -10,8 +10,12 @@ poyon.js
 
 注意点
 ----------------------------------------
-canvasを用いているため，古いブラウザ(IE8以下など)では表示されません．
-別の方法を用いるか，諦めてください．
+* canvasを用いているため，古いブラウザ(IE8以下など)では表示されません．
+  別の方法を用いるか，諦めてください．
+
+* 次のライブラリに依存していますので読み込んでください．
+    + jquery.js
+    + underscore.js
 
 使い方
 ----------------------------------------
@@ -21,6 +25,9 @@ canvasを用いているため，古いブラウザ(IE8以下など)では表示
 幅や高さはCSSで設定しても構いません．
 
 ```html
+<script src="http://cdnjs.cloudflare.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+<script src="http://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.5.2/underscore-min.js"></script>
+
 <canvas class="poyon" data-image="target1.jpg" width="200" height="200"></canvas>
 <canvas class="poyon" data-image="target2.jpg" width="200" height="200"></canvas>
 <canvas class="poyon" data-image="target3.jpg" width="200" height="200"></canvas>
