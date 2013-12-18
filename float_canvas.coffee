@@ -2,45 +2,57 @@ log = (args...)-> console.log(args...)
 do($=jQuery)->
   class Facade
     defaults:
+      random: true
+      scroll: true
+      flick: true
+      vertexNumber: 8
       radius: 70
       warpLevel: 0.5
+      warpAngularVelocity: 0.05
       spring: 0.015
       friction: 0.93
 
     constructor: (@$el, options)->
       @options = _.extend {}, @defaults, options
 
-      @width = @$el.width()
-      @height = @$el.height()
-      @offset = { x: @width * 0.5, y: @height * 0.5 }
+      @circle = new Circle(@options.vertexNumber, @options.radius)
+      if @options.random
+        @circle = new RandomCircle(@circle, @options.warpLevel, @options.warpAngularVelocity)
+      if @options.scroll
+        @circle = new ScrollCircle(@circle, @options.spring, @options.friction)
+      if @options.flick
+        @circle = new FlickCircle(@circle, @$el, @options.spring, @options.friction)
 
-      @circle = new Circle(@options.radius)
-      @circle = new RandomCircle(@circle)
-      @circle = new ScrollCircle(@circle)
-      @circle = new FlickCircle(@circle, @$el, @offset)
+      @render = new Render(@$el, @circle)
 
       @img = new PreloadImage(@$el.data("image"))
-      @img.promise().then(@onImage)
+      @img.promise().then(@render.setImage)
+
+      Timer.getInstance().add(@)
+
+    update: =>
+      @circle.update()
+      @render.run()
+
+  class Render
+    constructor: (@$el, @circle)->
+      [@width, @height] = [@$el.width(), @$el.height()]
+      @offset = { x: @width * 0.5, y: @height * 0.5 }
 
       @ctx = @$el[0].getContext("2d")
       @ctx.fillStyle = @ctx.strokeStyle = "#e6e5e5"
 
-      Timer.getInstance().on(@onTimer)
-
-    onTimer: =>
-      @update()
-      @render()
-
-    onImage: (img)=>
+    setImage: (img)=>
       @ctx.fillStyle = @ctx.createPattern(img, "repeat")
 
-    update: =>
-      @circle.update()
-
-    render: =>
+    run: =>
       @ctx.clearRect( 0, 0, @width, @height )
       @ctx.beginPath()
+      @mainRendering()
+      @ctx.closePath()
+      @ctx.fill()
 
+    mainRendering: =>
       start = @circle.at(-1).getCenter(@circle.at(0))
       start = Geometry.add(start, @offset)
       @ctx.moveTo(start.x, start.y)
@@ -52,43 +64,37 @@ do($=jQuery)->
 
       @ctx.stroke()
 
-      @ctx.closePath()
-      @ctx.fill()
-
   class Circle
     VERTEX_NUM = 8
-    ROT = 360.0 / VERTEX_NUM
 
-    constructor: (@radius)->
-      @points = for i in [0..VERTEX_NUM]
-        rad = Math.PI * ROT * i / 180
+    constructor: (vertexNumber, @radius)->
+      rot = 360.0 / vertexNumber
+      @points = for i in [0...vertexNumber]
+        rad = Math.PI * rot * i / 180
         [x,y] = [@radius * Math.cos(rad), @radius * Math.sin(rad)]
         new Point x, y
 
     at: (idx)=>
-      idx = idx % VERTEX_NUM
-      idx += VERTEX_NUM if idx < 0
+      idx = idx % @points.length
+      idx += @points.length if idx < 0
       @points[idx]
 
     curvePointEach: (callback)=>
-      for i in [0...VERTEX_NUM]
-        now = @points[i]
-        next = @points[(i + 1) % VERTEX_NUM]
-        callback( now, now.getCenter(next) )
+      for point, i in @points
+        callback( point, point.getCenter(@at i+1) )
 
     update: (fix, pow)=>
       point.update() for point in @points
 
   class RandomCircle extends Circle
-    constructor: (@circle)->
-      @points = (new WarpPoint(point) for point in @circle.points)
+    constructor: (@circle, level, angularVelocity)->
+      @points = (new WarpPoint(point, level, angularVelocity) for point in @circle.points)
 
   class ScrollCircle extends Circle
-    constructor: (@circle)->
-      @points = (new VelocityPoint(point) for point in @circle.points)
+    constructor: (@circle, spring, friction)->
+      @points = (new VelocityPoint(point, spring, friction) for point in @circle.points)
 
-      @ss = ScrollSensor.getInstance()
-      @ss.on(@onScroll)
+      ScrollSensor.getInstance().events.add(@onScroll)
 
     onScroll: (diff)=>
       return if diff == 0
@@ -105,8 +111,11 @@ do($=jQuery)->
         point.vY -= pow
 
   class FlickCircle extends Circle
-    constructor: (@circle, @$el, @offset)->
-      @points = (new VelocityPoint(point) for point in @circle.points)
+    constructor: (@circle, @$el, spring, friction)->
+      [width, height] = [@$el.width(), @$el.height()]
+      @offset = { x: width * 0.5, y: height * 0.5 }
+
+      @points = (new VelocityPoint(point, spring, friction) for point in @circle.points)
       @prevMouse = null
       @$el.on("mousemove", _.throttle(@onMouseMove,0.03))
       @$el.on("mouseover", @onMouseOver)
@@ -161,36 +170,30 @@ do($=jQuery)->
       y: (@y() + other.y()) * 0.5
 
   class WarpPoint extends Point
-    FIX = 0.5
-    RADIUS = 0.05
-
-    constructor: (@point)->
+    constructor: (@point, @level, angularVelocity)->
       @myX = @myY = 0
       @theta = { x: 0, y: 0 }
       @addTheta =
-        x: Math.random() * RADIUS - RADIUS * 0.5
-        y: Math.random() * RADIUS - RADIUS * 0.5
+        x: Math.random() * angularVelocity - angularVelocity * 0.5
+        y: Math.random() * angularVelocity - angularVelocity * 0.5
       @warp = Math.random() * 24 - 12
 
     update: =>
       @point.update()
       @theta = Geometry.add(@theta, @addTheta)
-      @myX = (@warp * Math.sin(@theta.x) * FIX)
-      @myY = (@warp * Math.cos(@theta.y) * FIX)
+      @myX = (@warp * Math.sin(@theta.x) * @level)
+      @myY = (@warp * Math.cos(@theta.y) * @level)
 
 
   class VelocityPoint extends Point
-    SPRING = 0.015
-    FRICTION = 0.93
-
-    constructor: (@point)->
+    constructor: (@point, @spring, @friction)->
       @vX = @vY = 0
       @myX = @myY = 0
 
     update: =>
       @point.update()
-      @myX += @vX = (@vX - @myX * SPRING) * FRICTION
-      @myY += @vY = (@vY - @myY * SPRING) * FRICTION
+      @myX += @vX = (@vX - @myX * @spring) * @friction
+      @myY += @vY = (@vY - @myY * @spring) * @friction
 
   class PreloadImage
     constructor: (@src)->
@@ -205,28 +208,15 @@ do($=jQuery)->
     _onLoad: =>
       @_dfd.resolve(@img)
 
-  class Events
-    constructor: ->
-      @callbacks = $.Callbacks()
-
-    on: (callback)=>
-      @callbacks.add(callback)
-
-    off: (callback)=>
-      @callbacks.remove(callback)
-
-    emit: (args...)=>
-      @callbacks.fire(args...)
-
   Singleton = (klass)->
     instance = null
     getInstance = => instance ?= new klass
     {getInstance}
 
   ScrollSensor = do->
-    class InnerScrollSensor extends Events
+    class InnerScrollSensor
       constructor: ->
-        super
+        @events = $.Callbacks()
         @$win = $(window)
         @$win.on("scroll", _.throttle(@onScroll, 50))
 
@@ -234,56 +224,61 @@ do($=jQuery)->
         now= @$win.scrollTop()
         @prev ?= now
         diff = now - @prev
-        @emit(diff)
+        @events.fire(diff)
         @prev = now
 
     Singleton(InnerScrollSensor)
 
   Timer = do->
-    class InnerTimer extends Events
-      TIME = 1000.0 / 30
+    class InnerTimer
+      TIME = 1000.0 / 60
+
       constructor: ->
-        super
+        @list = []
         @start()
 
       start: =>
         @emit()
-        @id = setTimeout(@start, @time)
+        @id = setTimeout(@start, TIME)
 
       stop: =>
         clearTimeout(@id)
 
+      emit: =>
+        elem.update() for elem in @list
+
+      add: (elem)=>
+        @list.push(elem)
+
+      remove: (elem)=>
+        @list = _.without(@list,elem)
+
     Singleton(InnerTimer)
 
   Geometry = do->
-    peel = (obj,key)->
-      switch
-        when _(obj[key]).isFunction() then obj[key]()
-        else obj[key]
-
     abs: abs = (v)->
-      [x,y] = [peel(v,"x"), peel(v,"y")]
+      [x,y] = [_.result(v,"x"), _.result(v,"y")]
       Math.sqrt( x * x + y * y )
 
     add: add = (a, b)->
-      x: peel(a,"x") + peel(b,"x")
-      y: peel(a,"y") + peel(b,"y")
+      x: _.result(a,"x") + _.result(b,"x")
+      y: _.result(a,"y") + _.result(b,"y")
 
     sub: sub = (a, b)->
-      x: peel(a,"x") - peel(b,"x")
-      y: peel(a,"y") - peel(b,"y")
+      x: _.result(a,"x") - _.result(b,"x")
+      y: _.result(a,"y") - _.result(b,"y")
 
     multi: multi = (v, m)->
-      x: peel(v,"x") * m
-      y: peel(v,"y") * m
+      x: _.result(v,"x") * m
+      y: _.result(v,"y") * m
 
     # a * b * cos
     dot: dot = (a,b)->
-      peel(a,"x") * peel(b,"x") + peel(a,"y") * peel(b,"y")
+      _.result(a,"x") * _.result(b,"x") + _.result(a,"y") * _.result(b,"y")
 
     # a * b * sin
     cross: cross = (a, b)->
-      peel(a,"x") * peel(b,"y") - peel(a,"y") * peel(b,"x")
+      _.result(a,"x") * _.result(b,"y") - _.result(a,"y") * _.result(b,"x")
 
     isIntersectionHalf : iih = (start, end, o1, o2)->
       v = sub(end,start)
@@ -306,12 +301,7 @@ do($=jQuery)->
       for dom in @
         $dom = $(dom)
         unless $.data($dom, "floatCanvas")?
-          $.data $dom, "floatCanvas", new Facade($dom, options)
-
-
-### options
-radius
-warpLevel
-spring
-friction
-###
+          $.data $dom, "floatCanvas", if dom.getContext?
+             new Facade($dom, options)
+          else
+            "This browser cannot use CANVAS function in html5."
