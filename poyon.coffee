@@ -2,11 +2,10 @@ log = (args...)-> console.log(args...)
 do($=jQuery)->
   class Facade
     defaults:
-      random: true
+      warp: true
       scroll: true
       flick: true
       vertexNumber: 8
-      radius: 70
       warpLevel: 0.5
       warpAngularVelocity: 0.05
       spring: 0.015
@@ -14,10 +13,11 @@ do($=jQuery)->
 
     constructor: (@$el, options)->
       @options = _.extend {}, @defaults, options
+      throw "no radius parameter" unless @options.radius?
 
       @circle = new Circle(@options.vertexNumber, @options.radius)
-      if @options.random
-        @circle = new RandomCircle(@circle, @options.warpLevel, @options.warpAngularVelocity)
+      if @options.warp
+        @circle = new WarpCircle(@circle, @options.warpLevel, @options.warpAngularVelocity)
       if @options.scroll
         @circle = new ScrollCircle(@circle, @options.spring, @options.friction)
       if @options.flick
@@ -86,7 +86,7 @@ do($=jQuery)->
     update: (fix, pow)=>
       point.update() for point in @points
 
-  class RandomCircle extends Circle
+  class WarpCircle extends Circle
     constructor: (@circle, level, angularVelocity)->
       @points = (new WarpPoint(point, level, angularVelocity) for point in @circle.points)
 
@@ -142,13 +142,13 @@ do($=jQuery)->
       if _.any(res)
         cross = Geometry.intersectionPoint(now, next, @prevMouse, mouse)
 
-        mvStrength= Geometry.abs(mv)
+        mvStrength= Geometry.length(mv)
         mv = Geometry.multi(mv, 0.5 / mvStrength) if (mvStrength < 0.5)
         mv = Geometry.multi(mv, 3.5 / mvStrength) if (mvStrength > 3.5)
 
         for point in @points
           v = Geometry.sub(cross, point)
-          dist = Geometry.abs(v)
+          dist = Geometry.length(v)
 
           pow = 10 / dist
           pow = 0.2 if pow < 0.2
@@ -256,7 +256,7 @@ do($=jQuery)->
     Singleton(InnerTimer)
 
   Geometry = do->
-    abs: abs = (v)->
+    length: length = (v)->
       [x,y] = [_.result(v,"x"), _.result(v,"y")]
       Math.sqrt( x * x + y * y )
 
@@ -297,7 +297,7 @@ do($=jQuery)->
       add start2, multi(v, t)
 
   $.fn.extend
-    floatCanvas: (options = {})->
+    poyon: (options = {})->
       for dom in @
         $dom = $(dom)
         unless $.data($dom, "floatCanvas")?
