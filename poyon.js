@@ -13,9 +13,9 @@
   };
 
   (function($) {
-    var Circle, Facade, FlickCircle, Geometry, Point, PreloadImage, Render, ScrollCircle, ScrollSensor, Singleton, Timer, VelocityPoint, WarpCircle, WarpPoint;
-    Facade = (function() {
-      Facade.prototype.defaults = {
+    var Circle, FlickCircle, Geometry, Point, Poyon, PreloadImage, Render, ScrollCircle, ScrollSensor, Singleton, Timer, VelocityPoint, WarpCircle, WarpPoint;
+    Poyon = (function() {
+      Poyon.prototype.defaults = {
         warp: true,
         scroll: true,
         flick: true,
@@ -26,7 +26,7 @@
         friction: 0.93
       };
 
-      function Facade($el, options) {
+      function Poyon($el, options) {
         this.$el = $el;
         this.update = __bind(this.update, this);
         this.options = _.extend({}, this.defaults, options);
@@ -49,12 +49,12 @@
         Timer.getInstance().add(this);
       }
 
-      Facade.prototype.update = function() {
+      Poyon.prototype.update = function() {
         this.circle.update();
         return this.render.run();
       };
 
-      return Facade;
+      return Poyon;
 
     })();
     Render = (function() {
@@ -577,7 +577,7 @@
           dom = this[_i];
           $dom = $(dom);
           if ($.data($dom, "floatCanvas") == null) {
-            _results.push($.data($dom, "floatCanvas", dom.getContext != null ? new Facade($dom, options) : "This browser cannot use CANVAS function in html5."));
+            _results.push($.data($dom, "floatCanvas", dom.getContext != null ? new Poyon($dom, options) : "This browser cannot use CANVAS function in html5."));
           } else {
             _results.push(void 0);
           }

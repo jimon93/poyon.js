@@ -1,6 +1,6 @@
 log = (args...)-> console.log(args...)
 do($=jQuery)->
-  class Facade
+  class Poyon
     defaults:
       warp: true
       scroll: true
@@ -302,6 +302,6 @@ do($=jQuery)->
         $dom = $(dom)
         unless $.data($dom, "floatCanvas")?
           $.data $dom, "floatCanvas", if dom.getContext?
-             new Facade($dom, options)
+             new Poyon($dom, options)
           else
             "This browser cannot use CANVAS function in html5."
