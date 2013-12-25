@@ -62,17 +62,14 @@ do($=jQuery)->
         pos = Geometry.add(pos, @offset)
         @ctx.quadraticCurveTo(sub.x, sub.y, pos.x, pos.y)
 
-      @ctx.stroke()
 
   class Circle
-    VERTEX_NUM = 8
-
     constructor: (vertexNumber, @radius)->
       rot = 360.0 / vertexNumber
       @points = for i in [0...vertexNumber]
         rad = Math.PI * rot * i / 180
         [x,y] = [@radius * Math.cos(rad), @radius * Math.sin(rad)]
-        new Point x, y
+        new BasePoint x, y
 
     at: (idx)=>
       idx = idx % @points.length
@@ -159,15 +156,20 @@ do($=jQuery)->
           point.vY += pow * mv.y
 
   class Point
-    constructor: (@myX, @myY)->
-
     update:=>
 
-    x:=> @myX + (if @point? then @point.x() else 0)
-    y:=> @myY + (if @point? then @point.y() else 0)
+    x:=> @myX + @point.x()
+    y:=> @myY + @point.y()
+
     getCenter: (other)=>
       x: (@x() + other.x()) * 0.5
       y: (@y() + other.y()) * 0.5
+
+  class BasePoint extends Point
+    constructor: (@myX, @myY)->
+
+    x:=> @myX
+    y:=> @myY
 
   class WarpPoint extends Point
     constructor: (@point, @level, angularVelocity)->
@@ -235,16 +237,17 @@ do($=jQuery)->
 
       constructor: ->
         @list = []
-        @start()
+        @requestAnimationFrame =
+          window.requestAnimationFrame       ||
+          window.webkitRequestAnimationFrame ||
+          window.mozRequestAnimationFrame    ||
+          window.oRequestAnimationFrame      ||
+          window.msRequestAnimationFrame     ||
+          (callback)-> window.setTimeout( callback, TIME )
+        @requestAnimationFrame.call(window, @start)
 
       start: =>
-        @emit()
-        @id = setTimeout(@start, TIME)
-
-      stop: =>
-        clearTimeout(@id)
-
-      emit: =>
+        @requestAnimationFrame.call(window, @start)
         elem.update() for elem in @list
 
       add: (elem)=>

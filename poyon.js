@@ -13,7 +13,7 @@
   };
 
   (function($) {
-    var Circle, FlickCircle, Geometry, Point, Poyon, PreloadImage, Render, ScrollCircle, ScrollSensor, Singleton, Timer, VelocityPoint, WarpCircle, WarpPoint;
+    var BasePoint, Circle, FlickCircle, Geometry, Point, Poyon, PreloadImage, Render, ScrollCircle, ScrollSensor, Singleton, Timer, VelocityPoint, WarpCircle, WarpPoint;
     Poyon = (function() {
       Poyon.prototype.defaults = {
         warp: true,
@@ -92,22 +92,17 @@
         start = this.circle.at(-1).getCenter(this.circle.at(0));
         start = Geometry.add(start, this.offset);
         this.ctx.moveTo(start.x, start.y);
-        this.circle.curvePointEach(function(sub, pos) {
+        return this.circle.curvePointEach(function(sub, pos) {
           sub = Geometry.add(sub, _this.offset);
           pos = Geometry.add(pos, _this.offset);
           return _this.ctx.quadraticCurveTo(sub.x, sub.y, pos.x, pos.y);
         });
-        return this.ctx.stroke();
       };
 
       return Render;
 
     })();
     Circle = (function() {
-      var VERTEX_NUM;
-
-      VERTEX_NUM = 8;
-
       function Circle(vertexNumber, radius) {
         var i, rad, rot, x, y;
         this.radius = radius;
@@ -121,7 +116,7 @@
           for (i = _i = 0; 0 <= vertexNumber ? _i < vertexNumber : _i > vertexNumber; i = 0 <= vertexNumber ? ++_i : --_i) {
             rad = Math.PI * rot * i / 180;
             _ref = [this.radius * Math.cos(rad), this.radius * Math.sin(rad)], x = _ref[0], y = _ref[1];
-            _results.push(new Point(x, y));
+            _results.push(new BasePoint(x, y));
           }
           return _results;
         }).call(this);
@@ -326,9 +321,7 @@
 
     })(Circle);
     Point = (function() {
-      function Point(myX, myY) {
-        this.myX = myX;
-        this.myY = myY;
+      function Point() {
         this.getCenter = __bind(this.getCenter, this);
         this.y = __bind(this.y, this);
         this.x = __bind(this.x, this);
@@ -338,11 +331,11 @@
       Point.prototype.update = function() {};
 
       Point.prototype.x = function() {
-        return this.myX + (this.point != null ? this.point.x() : 0);
+        return this.myX + this.point.x();
       };
 
       Point.prototype.y = function() {
-        return this.myY + (this.point != null ? this.point.y() : 0);
+        return this.myY + this.point.y();
       };
 
       Point.prototype.getCenter = function(other) {
@@ -355,6 +348,27 @@
       return Point;
 
     })();
+    BasePoint = (function(_super) {
+      __extends(BasePoint, _super);
+
+      function BasePoint(myX, myY) {
+        this.myX = myX;
+        this.myY = myY;
+        this.y = __bind(this.y, this);
+        this.x = __bind(this.x, this);
+      }
+
+      BasePoint.prototype.x = function() {
+        return this.myX;
+      };
+
+      BasePoint.prototype.y = function() {
+        return this.myY;
+      };
+
+      return BasePoint;
+
+    })(Point);
     WarpPoint = (function(_super) {
       __extends(WarpPoint, _super);
 
@@ -474,24 +488,17 @@
         function InnerTimer() {
           this.remove = __bind(this.remove, this);
           this.add = __bind(this.add, this);
-          this.emit = __bind(this.emit, this);
-          this.stop = __bind(this.stop, this);
           this.start = __bind(this.start, this);
           this.list = [];
-          this.start();
+          this.requestAnimationFrame = window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame || window.oRequestAnimationFrame || window.msRequestAnimationFrame || function(callback) {
+            return window.setTimeout(callback, TIME);
+          };
+          this.requestAnimationFrame.call(window, this.start);
         }
 
         InnerTimer.prototype.start = function() {
-          this.emit();
-          return this.id = setTimeout(this.start, TIME);
-        };
-
-        InnerTimer.prototype.stop = function() {
-          return clearTimeout(this.id);
-        };
-
-        InnerTimer.prototype.emit = function() {
           var elem, _i, _len, _ref, _results;
+          this.requestAnimationFrame.call(window, this.start);
           _ref = this.list;
           _results = [];
           for (_i = 0, _len = _ref.length; _i < _len; _i++) {
