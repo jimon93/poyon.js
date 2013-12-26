@@ -10,7 +10,7 @@ do($=jQuery)->
       warpAngularVelocity: 0.05
       spring: 0.015
       friction: 0.93
-      renderHiddenImage: false
+      renderHiddenImage: true
 
     constructor: (@$el, options)->
       @options = _.extend {}, @defaults, options

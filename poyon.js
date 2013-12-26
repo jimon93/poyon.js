@@ -24,7 +24,7 @@
         warpAngularVelocity: 0.05,
         spring: 0.015,
         friction: 0.93,
-        renderHiddenImage: false
+        renderHiddenImage: true
       };
 
       function Poyon($el, options) {
