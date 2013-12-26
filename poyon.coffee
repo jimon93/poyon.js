@@ -10,12 +10,13 @@ do($=jQuery)->
       warpAngularVelocity: 0.05
       spring: 0.015
       friction: 0.93
+      renderHiddenImage: false
 
     constructor: (@$el, options)->
       @options = _.extend {}, @defaults, options
       throw "no radius parameter" unless @options.radius?
 
-      @circle = new Circle(@options.vertexNumber, @options.radius)
+      @circle = new BaseCircle(@options.vertexNumber, @options.radius)
       if @options.warp
         @circle = new WarpCircle(@circle, @options.warpLevel, @options.warpAngularVelocity)
       if @options.scroll
@@ -23,7 +24,7 @@ do($=jQuery)->
       if @options.flick
         @circle = new FlickCircle(@circle, @$el, @options.spring, @options.friction)
 
-      @render = new Render(@$el, @circle)
+      @render = new Render(@$el, @circle, @options.renderHiddenImage)
 
       @img = new PreloadImage(@$el.data("image"))
       @img.promise().then(@render.setImage)
@@ -35,7 +36,7 @@ do($=jQuery)->
       @render.run()
 
   class Render
-    constructor: (@$el, @circle)->
+    constructor: (@$el, @circle, @renderHiddenImage)->
       [@width, @height] = [@$el.width(), @$el.height()]
       @offset = { x: @width * 0.5, y: @height * 0.5 }
 
@@ -46,31 +47,28 @@ do($=jQuery)->
       @ctx.fillStyle = @ctx.createPattern(img, "repeat")
 
     run: =>
-      @ctx.clearRect( 0, 0, @width, @height )
-      @ctx.beginPath()
-      @mainRendering()
-      @ctx.closePath()
-      @ctx.fill()
+      if @renderHiddenImage or @isVisible()
+        @ctx.clearRect( 0, 0, @width, @height )
+        @ctx.beginPath()
+        @mainRendering()
+        @ctx.closePath()
+        @ctx.fill()
 
     mainRendering: =>
-      start = @circle.at(-1).getCenter(@circle.at(0))
-      start = Geometry.add(start, @offset)
+      start = Geometry.center(@circle.at(-1), @circle.at(0))
+      Geometry.add(start, @offset)
       @ctx.moveTo(start.x, start.y)
 
       @circle.curvePointEach (sub, pos)=>
-        sub = Geometry.add(sub, @offset)
-        pos = Geometry.add(pos, @offset)
+        Geometry.add(sub, @offset)
+        Geometry.add(pos, @offset)
         @ctx.quadraticCurveTo(sub.x, sub.y, pos.x, pos.y)
 
+    isVisible:=>
+      rect = @$el[0].getBoundingClientRect()
+      rect.bottom > 0 && rect.right > 0 && window.innerHeight - rect.top > 0 && window.innerWidth - rect.left > 0
 
   class Circle
-    constructor: (vertexNumber, @radius)->
-      rot = 360.0 / vertexNumber
-      @points = for i in [0...vertexNumber]
-        rad = Math.PI * rot * i / 180
-        [x,y] = [@radius * Math.cos(rad), @radius * Math.sin(rad)]
-        new BasePoint x, y
-
     at: (idx)=>
       idx = idx % @points.length
       idx += @points.length if idx < 0
@@ -78,10 +76,18 @@ do($=jQuery)->
 
     curvePointEach: (callback)=>
       for point, i in @points
-        callback( point, point.getCenter(@at i+1) )
+        callback(point.vector(), Geometry.center(point, @at(i+1)))
 
     update: (fix, pow)=>
       point.update() for point in @points
+
+  class BaseCircle extends Circle
+    constructor: (vertexNumber, @radius)->
+      rot = 360.0 / vertexNumber
+      @points = for i in [0...vertexNumber]
+        rad = Math.PI * rot * i / 180
+        [x,y] = [@radius * Math.cos(rad), @radius * Math.sin(rad)]
+        new BasePoint x, y
 
   class WarpCircle extends Circle
     constructor: (@circle, level, angularVelocity)->
@@ -130,7 +136,7 @@ do($=jQuery)->
       @prevMouse = null
 
     flick: (mouse)=>
-      mv = Geometry.sub(mouse, @prevMouse)
+      mv = Geometry.sub(mouse, @prevMouse, {})
 
       res = for now, i in @points
         next = @at(i+1)
@@ -140,36 +146,42 @@ do($=jQuery)->
         cross = Geometry.intersectionPoint(now, next, @prevMouse, mouse)
 
         mvStrength= Geometry.length(mv)
-        mv = Geometry.multi(mv, 0.5 / mvStrength) if (mvStrength < 0.5)
-        mv = Geometry.multi(mv, 3.5 / mvStrength) if (mvStrength > 3.5)
+        Geometry.multi(mv, 0.5 / mvStrength) if (mvStrength < 0.5)
+        Geometry.multi(mv, 3.5 / mvStrength) if (mvStrength > 3.5)
 
         for point in @points
-          v = Geometry.sub(cross, point)
+          v = Geometry.sub(cross, point, {})
           dist = Geometry.length(v)
 
           pow = 10 / dist
           pow = 0.2 if pow < 0.2
           pow = 1   if 1 < pow or _.isNaN(dist)
 
-
           point.vX += pow * mv.x
           point.vY += pow * mv.y
 
   class Point
     update:=>
+      @_x = @_y = null
 
-    x:=> @myX + @point.x()
-    y:=> @myY + @point.y()
+    x:=>
+      @_x ?= @myX + @point.x()
 
-    getCenter: (other)=>
-      x: (@x() + other.x()) * 0.5
-      y: (@y() + other.y()) * 0.5
+    y:=>
+      @_y ?= @myY + @point.y()
+
+    vector:=>
+      x: @x()
+      y: @y()
 
   class BasePoint extends Point
     constructor: (@myX, @myY)->
 
-    x:=> @myX
-    y:=> @myY
+    x:=>
+      @myX
+
+    y:=>
+      @myY
 
   class WarpPoint extends Point
     constructor: (@point, @level, angularVelocity)->
@@ -181,11 +193,11 @@ do($=jQuery)->
       @warp = Math.random() * 24 - 12
 
     update: =>
+      super
       @point.update()
-      @theta = Geometry.add(@theta, @addTheta)
+      Geometry.add(@theta, @addTheta)
       @myX = (@warp * Math.sin(@theta.x) * @level)
       @myY = (@warp * Math.cos(@theta.y) * @level)
-
 
   class VelocityPoint extends Point
     constructor: (@point, @spring, @friction)->
@@ -193,6 +205,7 @@ do($=jQuery)->
       @myX = @myY = 0
 
     update: =>
+      super
       @point.update()
       @myX += @vX = (@vX - @myX * @spring) * @friction
       @myY += @vY = (@vY - @myY * @spring) * @friction
@@ -235,26 +248,25 @@ do($=jQuery)->
     class InnerTimer
       TIME = 1000.0 / 60
 
+      LOOP =
+        window.requestAnimationFrame       ||
+        window.webkitRequestAnimationFrame ||
+        window.mozRequestAnimationFrame    ||
+        window.oRequestAnimationFrame      ||
+        window.msRequestAnimationFrame     ||
+        (callback)-> window.setTimeout(callback, TIME)
+      LOOP = _.bind(LOOP, window)
+
       constructor: ->
         @list = []
-        @requestAnimationFrame =
-          window.requestAnimationFrame       ||
-          window.webkitRequestAnimationFrame ||
-          window.mozRequestAnimationFrame    ||
-          window.oRequestAnimationFrame      ||
-          window.msRequestAnimationFrame     ||
-          (callback)-> window.setTimeout( callback, TIME )
-        @requestAnimationFrame.call(window, @start)
+        LOOP @start
 
       start: =>
-        @requestAnimationFrame.call(window, @start)
+        LOOP @start
         elem.update() for elem in @list
 
       add: (elem)=>
         @list.push(elem)
-
-      remove: (elem)=>
-        @list = _.without(@list,elem)
 
     Singleton(InnerTimer)
 
@@ -263,17 +275,23 @@ do($=jQuery)->
       [x,y] = [_.result(v,"x"), _.result(v,"y")]
       Math.sqrt( x * x + y * y )
 
-    add: add = (a, b)->
-      x: _.result(a,"x") + _.result(b,"x")
-      y: _.result(a,"y") + _.result(b,"y")
+    add: add = (a, b, o=a)->
+      o.x = _.result(a,"x") + _.result(b,"x")
+      o.y = _.result(a,"y") + _.result(b,"y")
+      return o
 
-    sub: sub = (a, b)->
-      x: _.result(a,"x") - _.result(b,"x")
-      y: _.result(a,"y") - _.result(b,"y")
+    sub: sub = (a, b, o=a)->
+      o.x = _.result(a,"x") - _.result(b,"x")
+      o.y = _.result(a,"y") - _.result(b,"y")
+      return o
 
-    multi: multi = (v, m)->
-      x: _.result(v,"x") * m
-      y: _.result(v,"y") * m
+    multi: multi = (v, m, o=v)->
+      o.x = _.result(v,"x") * m
+      o.y = _.result(v,"y") * m
+      return o
+
+    center: (a, b)->
+      res = multi(add(a,b,{}), 0.5)
 
     # a * b * cos
     dot: dot = (a,b)->
@@ -284,20 +302,20 @@ do($=jQuery)->
       _.result(a,"x") * _.result(b,"y") - _.result(a,"y") * _.result(b,"x")
 
     isIntersectionHalf : iih = (start, end, o1, o2)->
-      v = sub(end,start)
-      a = sub(o1, start)
-      b = sub(o2, start)
+      v = sub(end,start, {})
+      a = sub(o1, start, {})
+      b = sub(o2, start, {})
       0 <= dot(v,a) and 0 <= dot(v,b) and cross(v,a) * cross(v,b) <= 0
 
     isIntersection: (start1, end1, start2, end2)->
       iih(start1,end1, start2, end2) and iih(end1, start1, start2, end2)
 
     intersectionPoint: (start1, end1, start2, end2)->
-      v = sub(end2, start2)
-      d1 = cross v, sub(start1, start2)
-      d2 = cross v, sub(start2, start2)
+      v = sub(end2, start2, {})
+      d1 = cross v, sub(start1, start2, {})
+      d2 = cross v, sub(end1, start2, {})
       t = d1 / (d1 + d2)
-      add start2, multi(v, t)
+      add start2, multi(v, t), {}
 
   $.fn.extend
     poyon: (options = {})->
