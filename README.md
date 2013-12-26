@@ -58,6 +58,7 @@ $(function(){
 |warpAngularVelocity|任意|0.05|warpの動きの速さ|
 |spring|任意|0.015|元に戻ろうとする力の割合|
 |friction|任意|0.93|摩擦力の割合|
+|renderHiddenVisible|任意|true|画面範囲外の要素のレンダリングを行うか否か|
 
 加速度を持った頂点
 ----------------------------------------
